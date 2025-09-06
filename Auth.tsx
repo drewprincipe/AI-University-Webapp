@@ -1,0 +1,351 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import { Brain, Mail, Lock, User, ArrowRight } from "lucide-react";
+
+const Auth = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user is already signed in
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Check if they have completed onboarding
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('onboarding_completed')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (profile?.onboarding_completed) {
+          navigate("/dashboard");
+        } else {
+          navigate("/onboarding");
+        }
+      }
+    };
+    
+    checkUser();
+  }, [navigate]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // Check if user has completed onboarding
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('onboarding_completed')
+          .eq('user_id', data.user.id)
+          .single();
+        
+        if (profile?.onboarding_completed) {
+          navigate("/dashboard");
+        } else {
+          navigate("/onboarding");
+        }
+      }
+    } catch (error: any) {
+      toast({
+        title: "Sign In Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (password !== confirmPassword) {
+      toast({
+        title: "Passwords Don't Match",
+        description: "Please make sure both password fields match.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        toast({
+          title: "Account Created! 🎉",
+          description: "Welcome to AI University. Let's set up your learning journey.",
+        });
+        navigate("/onboarding");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Sign Up Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTestOnboarding = async () => {
+    // For testing - go directly to onboarding with test parameter
+    navigate("/onboarding?test=true");
+  };
+
+  const handleResetOnboarding = async () => {
+    setIsLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Reset onboarding status for existing user
+        await supabase
+          .from('user_profiles')
+          .update({ onboarding_completed: false })
+          .eq('user_id', user.id);
+        
+        toast({
+          title: "Onboarding Reset",
+          description: "You can now redo the onboarding process.",
+        });
+        navigate("/onboarding");
+      } else {
+        // No user, just go to onboarding
+        navigate("/onboarding");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20 flex items-center justify-center p-4">
+      {/* Subtle floating orbs for ambiance */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-1/4 right-1/5 w-32 h-32 bg-gradient-primary rounded-full blur-3xl opacity-5"></div>
+        <div className="absolute bottom-1/3 left-1/4 w-48 h-48 bg-gradient-accent rounded-full blur-3xl opacity-4"></div>
+      </div>
+      
+      {/* Subtle glass overlay */}
+      <div className="fixed inset-0 bg-white/20 backdrop-blur-[50px] pointer-events-none"></div>
+      <div className="w-full max-w-md relative z-10">
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2 font-bold text-2xl mb-4">
+            <div className="w-6 h-6 bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 rounded-lg shadow-lg"></div>
+            <span className="bg-gradient-to-r from-slate-900 via-blue-800 to-slate-900 bg-clip-text text-transparent">AI University</span>
+          </div>
+          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 bg-clip-text text-transparent">Welcome</h1>
+          <p className="text-slate-600">
+            Start your personalized learning journey today
+          </p>
+        </div>
+
+        <Tabs defaultValue="signin" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="signin">Sign In</TabsTrigger>
+            <TabsTrigger value="signup">Sign Up</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="signin">
+            <Card className="bg-white/60 backdrop-blur-xl border-blue-100/50 shadow-lg">
+              <CardHeader>
+                <CardTitle className="bg-gradient-to-r from-slate-900 via-blue-800 to-slate-900 bg-clip-text text-transparent">Sign In</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div>
+                    <Label htmlFor="signin-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signin-email"
+                        type="email"
+                        placeholder="Enter your email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="signin-password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signin-password"
+                        type="password"
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? "Signing In..." : "Sign In"}
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="signup">
+            <Card className="bg-white/60 backdrop-blur-xl border-blue-100/50 shadow-lg">
+              <CardHeader>
+                <CardTitle className="bg-gradient-to-r from-slate-900 via-blue-800 to-slate-900 bg-clip-text text-transparent">Create Account</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <div>
+                    <Label htmlFor="signup-name">Full Name</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signup-name"
+                        type="text"
+                        placeholder="Enter your full name"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="signup-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="Enter your email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="signup-password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signup-password"
+                        type="password"
+                        placeholder="Create a password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="signup-confirm-password"
+                        type="password"
+                        placeholder="Confirm your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="pl-10"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? "Creating Account..." : "Create Account"}
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        <div className="text-center mt-6 space-y-2">
+          <div className="border-t pt-4">
+            <p className="text-sm text-muted-foreground mb-2">Testing Tools</p>
+            <div className="flex gap-2 justify-center">
+              <Button variant="outline" size="sm" onClick={handleTestOnboarding}>
+                Test Onboarding
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleResetOnboarding} disabled={isLoading}>
+                Reset & Redo Onboarding
+              </Button>
+            </div>
+          </div>
+          <Button variant="ghost" onClick={() => navigate("/")}>
+            ← Back to Home
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Auth;
